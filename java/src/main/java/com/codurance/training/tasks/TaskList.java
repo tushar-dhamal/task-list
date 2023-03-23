@@ -1,149 +1,72 @@
 package com.codurance.training.tasks;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
-import java.util.ArrayList;
+
+import com.codurance.training.tasks.Task;
+
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
-public final class TaskList implements Runnable {
-    private static final String QUIT = "quit";
+public final class TaskList {
 
-    private final Map<String, List<Task>> tasks = new LinkedHashMap<>();
-    private final BufferedReader in;
-    private final PrintWriter out;
+    private final Map<String, List<com.codurance.training.tasks.Task>> tasks = new LinkedHashMap<>();
+    private final Map<Long, String> deadlines = new LinkedHashMap<>();
 
-    private long lastId = 0;
+    private CustomId customId = new CustomId();
 
-    public static void main(String[] args) throws Exception {
-        BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
-        PrintWriter out = new PrintWriter(System.out);
-        new TaskList(in, out).run();
+    public Map<String, List<com.codurance.training.tasks.Task>> getTasks() {
+        return this.tasks;
     }
 
-    public TaskList(BufferedReader reader, PrintWriter writer) {
-        this.in = reader;
-        this.out = writer;
+    public Map<Long, String> getDeadlines() {
+        return this.deadlines;
     }
 
-    public void run() {
-        while (true) {
-            out.print("> ");
-            out.flush();
-            String command;
-            try {
-                command = in.readLine();
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-            if (command.equals(QUIT)) {
-                break;
-            }
-            execute(command);
-        }
-    }
-
-    private void execute(String commandLine) {
-        String[] commandRest = commandLine.split(" ", 2);
-        String command = commandRest[0];
-        switch (command) {
-            case "show":
-                show();
-                break;
-            case "add":
-                add(commandRest[1]);
-                break;
-            case "check":
-                check(commandRest[1]);
-                break;
-            case "uncheck":
-                uncheck(commandRest[1]);
-                break;
-            case "help":
-                help();
-                break;
-            default:
-                error(command);
-                break;
-        }
-    }
-
-    private void show() {
-        for (Map.Entry<String, List<Task>> project : tasks.entrySet()) {
-            out.println(project.getKey());
-            for (Task task : project.getValue()) {
-                out.printf("    [%c] %d: %s%n", (task.isDone() ? 'x' : ' '), task.getId(), task.getDescription());
-            }
-            out.println();
-        }
-    }
-
-    private void add(String commandLine) {
-        String[] subcommandRest = commandLine.split(" ", 2);
-        String subcommand = subcommandRest[0];
-        if (subcommand.equals("project")) {
-            addProject(subcommandRest[1]);
-        } else if (subcommand.equals("task")) {
-            String[] projectTask = subcommandRest[1].split(" ", 2);
-            addTask(projectTask[0], projectTask[1]);
-        }
-    }
-
-    private void addProject(String name) {
-        tasks.put(name, new ArrayList<Task>());
-    }
-
-    private void addTask(String project, String description) {
-        List<Task> projectTasks = tasks.get(project);
-        if (projectTasks == null) {
-            out.printf("Could not find a project with the name \"%s\".", project);
-            out.println();
-            return;
-        }
-        projectTasks.add(new Task(nextId(), description, false));
-    }
-
-    private void check(String idString) {
-        setDone(idString, true);
-    }
-
-    private void uncheck(String idString) {
-        setDone(idString, false);
-    }
-
-    private void setDone(String idString, boolean done) {
-        int id = Integer.parseInt(idString);
-        for (Map.Entry<String, List<Task>> project : tasks.entrySet()) {
-            for (Task task : project.getValue()) {
+    public com.codurance.training.tasks.Task getTask(String taskId) {
+        Long id = getIdentificationKey(taskId);
+        for (Map.Entry<String, List<com.codurance.training.tasks.Task>> project : this.tasks.entrySet()) {
+            for (com.codurance.training.tasks.Task task : project.getValue()) {
                 if (task.getId() == id) {
-                    task.setDone(done);
-                    return;
+                    return task;
                 }
             }
         }
-        out.printf("Could not find a task with an ID of %d.", id);
-        out.println();
+        return null;
     }
 
-    private void help() {
-        out.println("Commands:");
-        out.println("  show");
-        out.println("  add project <project name>");
-        out.println("  add task <project name> <task description>");
-        out.println("  check <task ID>");
-        out.println("  uncheck <task ID>");
-        out.println();
+    private Long getIdentificationKey(String taskId) {
+        boolean numberFlag = false;
+        if(StringUtils.isNumber(taskId))
+            numberFlag = true;
+
+        if(numberFlag) return Long.valueOf(taskId);
+        else {
+            Long l = this.customId.getKeyId(taskId);
+            return l;
+        }
+
     }
 
-    private void error(String command) {
-        out.printf("I don't know what the command \"%s\" is.", command);
-        out.println();
+    public void deleteTask(Long taskId) {
+        for (Map.Entry<String, List<com.codurance.training.tasks.Task>> project : this.tasks.entrySet()) {
+            Iterator iterator = project.getValue().iterator();
+            while(iterator.hasNext()) {
+                com.codurance.training.tasks.Task task = (Task) iterator.next();
+                if (task.getId() == taskId) {
+                    iterator.remove();
+                }
+            }
+        }
     }
 
-    private long nextId() {
-        return ++lastId;
+    public Map<String, List<Long>> getTaskByDeadline() {
+        return this.deadlines.entrySet().stream().
+                collect(Collectors.groupingBy(s->s.getValue(),Collectors.mapping(s->s.getKey(),Collectors.toList())));
+    }
+
+    public CustomId getCustomId() {
+        return this.customId;
     }
 }
